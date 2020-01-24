@@ -5,7 +5,7 @@ from encode import train as encode
 from sklearn.svm import OneClassSVM
 from sklearn.svm import SVC
 from sklearn.neighbors import LocalOutlierFactor
-from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
+from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, precision_score, recall_score
 from reader import get_traces
 import numpy as np
 import os
@@ -27,12 +27,14 @@ def one_class(log_name, test_vectors, train, test, normal_traces, nu, labels):
     f1 = f1_score(labels, classes)
     auc = roc_auc_score(labels, classes)
     acc = accuracy_score(labels, classes)
+    prc = precision_score(labels, classes)
+    rec = recall_score(labels, classes)
     # acc = (anom_checked.count(False) + normal_checked.count(True)) / float(len(test)) 
 
     print(log_name, 
         "OCSVM", 
         nu, 
-        f1, auc, acc, sep=",")
+        f1, auc, acc, prc, rec, sep=",")
 
 
 def supervised(log_name, test_vectors, train, test, normal_traces, train_labels, test_labels):
@@ -49,12 +51,14 @@ def supervised(log_name, test_vectors, train, test, normal_traces, train_labels,
     f1 = f1_score(test_labels, classes)
     auc = roc_auc_score(test_labels, classes)
     acc = accuracy_score(test_labels, classes)
+    prc = precision_score(test_labels, classes)
+    rec = recall_score(test_labels, classes)
     # acc = (anom_checked.count(False) + normal_checked.count(True)) / float(len(test))
 
     print(log_name, 
           "SVM", 
           "",
-          f1, auc, acc, sep=",")
+          f1, auc, acc, prc, rec, sep=",")
 
 
 def lof(log_name, test_vectors, train, test, normal_traces, k=20, contamination=0.01):
