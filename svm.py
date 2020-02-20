@@ -13,19 +13,16 @@ import re
 from random import shuffle
 
 
-def one_class(log_name, test_vectors, train, test, normal_traces, nu, labels):
+def one_class(log_name, train, test, nu, labels):
     ocsvm = OneClassSVM(kernel='linear', nu=nu)
     ocsvm.fit(train)
     classes = list(ocsvm.predict(test))
 
-    anom_cases = [test_vectors[k] for k, x in enumerate(classes) if x == -1]
-    normal_cases = [test_vectors[k] for k, x in enumerate(classes) if x == 1]
-
-    anom_checked = [is_normal(t, normal_traces) for t in anom_cases]
-    normal_checked = [is_normal(t, normal_traces) for t in normal_cases]
-
     f1 = f1_score(labels, classes)
-    auc = roc_auc_score(labels, classes)
+    try:
+        auc = roc_auc_score(labels, classes)
+    except ValueError:
+        auc = "n/a"
     acc = accuracy_score(labels, classes)
     prc = precision_score(labels, classes)
     rec = recall_score(labels, classes)
@@ -37,19 +34,20 @@ def one_class(log_name, test_vectors, train, test, normal_traces, nu, labels):
         f1, auc, acc, prc, rec, sep=",")
 
 
-def supervised(log_name, test_vectors, train, test, normal_traces, train_labels, test_labels):
+def supervised(log_name, train, test, train_labels, test_labels):
     svc = SVC(kernel='linear')
-    svc.fit(train, train_labels)
+    try:
+        svc.fit(train, train_labels)
+    except ValueError:
+        return
+    
     classes = list(svc.predict(test))
 
-    anom_cases = [test_vectors[k] for k, x in enumerate(classes) if x == -1]
-    normal_cases = [test_vectors[k] for k, x in enumerate(classes) if x == 1]
-
-    anom_checked = [is_normal(t, normal_traces) for t in anom_cases]
-    normal_checked = [is_normal(t, normal_traces) for t in normal_cases]
-
     f1 = f1_score(test_labels, classes)
-    auc = roc_auc_score(test_labels, classes)
+    try:
+        auc = roc_auc_score(test_labels, classes)
+    except ValueError:
+        auc = "n/a"
     acc = accuracy_score(test_labels, classes)
     prc = precision_score(test_labels, classes)
     rec = recall_score(test_labels, classes)
@@ -61,47 +59,51 @@ def supervised(log_name, test_vectors, train, test, normal_traces, train_labels,
           f1, auc, acc, prc, rec, sep=",")
 
 
-def lof(log_name, test_vectors, train, test, normal_traces, k=20, contamination=0.01):
+def lof(log_name, train, test, k, contamination, labels):
     model = LocalOutlierFactor(k, contamination=contamination, novelty=True)
     model.fit(train)
     classes = list(model.predict(test))
 
-    anom_cases = [test_vectors[k] for k, x in enumerate(classes) if x == -1]
-    normal_cases = [test_vectors[k] for k, x in enumerate(classes) if x == 1]
-
-    anom_checked = [is_normal(t, normal_traces) for t in anom_cases]
-    normal_checked = [is_normal(t, normal_traces) for t in normal_cases]
-
-    acc = (anom_checked.count(False) + normal_checked.count(True)) / float(len(test)) 
+    f1 = f1_score(labels, classes)
+    try:
+        auc = roc_auc_score(labels, classes)
+    except ValueError:
+        auc = "n/a"
+    acc = accuracy_score(labels, classes)
+    prc = precision_score(labels, classes)
+    rec = recall_score(labels, classes)
 
     print(log_name, 
         "lof", 
-        k, 
-        acc, sep=",")
+        f'{k} - {contamination}', 
+        f1, auc, acc, prc, rec, sep=",")
 
 
 def train(log_name, traces_name, w2v_model):
-    normal_traces = [line.strip('\n') for line in open(f"traces/{traces_name}.txt", 'r')]
-    traces = get_traces("logs/" + log_name + ".csv")
+    # normal_traces = [line.strip('\n') for line in open(f"traces/{traces_name}.txt", 'r')]
+    traces, labels = get_traces(log_name)
     shuffle(traces)
     v = create_vectors(w2v_model, traces)
 
 
     limit = int(len(traces) * 0.7)
     train, test = v[:limit], v[limit:]
-    train_traces, test_traces = traces[:limit], traces[limit:]
+    train_labels, test_labels = labels[:limit], labels[limit:]
+    # train_traces, test_traces = traces[:limit], traces[limit:]
     
     # print("log_name,nu,method,accuracy")
 
-    train_labels = np.array([1 if is_normal(trace, normal_traces) else -1 for trace in traces[:limit]])
-    test_labels = np.array([1 if is_normal(trace, normal_traces) else -1 for trace in traces[limit:]])
+    # train_labels = np.array([1 if is_normal(trace, normal_traces) else -1 for trace in traces[:limit]])
+    # test_labels = np.array([1 if is_normal(trace, normal_traces) else -1 for trace in traces[limit:]])
 
     for nu in [0.001, 0.005, 0.01, 0.05, 0.1, 0.3, 0.5]: 
-        one_class(log_name, test_traces, train, test, normal_traces, nu, test_labels)
+        one_class(log_name, train, test, nu, test_labels)
     
-    # lof(log_name, test_traces, train, test, normal_traces)
+    for k in [10, 15, 20, 25]:
+        for contamination in [0.01, 0.1, 0.3]:
+            lof(log_name, train, test, k, contamination, test_labels)
 
-    supervised(log_name, test_traces, train, test, normal_traces, train_labels, test_labels)
+    supervised(log_name, train, test, train_labels, test_labels)
 
 
 def is_normal(vector, normal_traces):
@@ -110,12 +112,15 @@ def is_normal(vector, normal_traces):
 
 
 if __name__ == "__main__":
-    anom_types = ["all", "rework", "earlylate", "skip", "insert"]
-    proportions = [5, 10, 15, 20, 30]
+    # anom_types = ["all", "rework", "earlylate", "skip", "insert"]
+    # proportions = [5, 10, 15, 20, 30]
     
-    for i in [1,2]: 
-        for a in anom_types:
-            for p in proportions:
-                log_name = f"log{i}_anom_{a}_{p}"
-                w2v_model = encode(log_name, min_count=1)
-                train(log_name, f"normal_pn{i}", w2v_model)
+    # for i in [1,2]: 
+    #     for a in anom_types:
+    #         for p in proportions:
+    #             log_name = f"log{i}_anom_{a}_{p}"
+    #             w2v_model = encode(log_name, min_count=1)
+    #             train(log_name, f"normal_pn{i}", w2v_model)
+    for f in os.listdir('logs/csv'):
+        w2v_model = encode('logs/csv/' + f, min_count=1)
+        train('logs/csv/' + f, None, w2v_model)

@@ -8,7 +8,7 @@ import numpy as np
 
 
 def train(filename, min_count=1):
-    traces = get_traces("logs/" + filename + ".csv")
+    traces, _ = get_traces(filename)
     model = Word2Vec(traces, min_count=1, workers=8)
     model = Word2Vec(sentences=traces, min_count=min_count)
     return model
