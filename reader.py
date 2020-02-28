@@ -12,10 +12,11 @@ def get_traces(filename):
         lst = list(reader)
         idx_label = lst[0].index('label')
         idx_activity = lst[0].index('activity_name')
+        idx_case = lst[0].index('case_id')
         for row in lst[1:]:
-            if row[0] not in traces:
-                traces[row[0]] = []
-            traces[row[0]].append(row)
+            if row[idx_case] not in traces:
+                traces[row[idx_case]] = []
+            traces[row[idx_case]].append(row)
 
     phrases = []
     labels = []

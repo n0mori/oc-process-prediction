@@ -6,6 +6,7 @@ from sklearn.svm import OneClassSVM
 from sklearn.svm import SVC
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, precision_score, recall_score
+from sklearn.model_selection import GridSearchCV
 from reader import get_traces
 import numpy as np
 import os
@@ -35,28 +36,34 @@ def one_class(log_name, train, test, nu, labels):
 
 
 def supervised(log_name, train, test, train_labels, test_labels):
-    svc = SVC(kernel='linear')
-    try:
-        svc.fit(train, train_labels)
-    except ValueError:
-        return
-    
-    classes = list(svc.predict(test))
+    for kernel in ['rbf', 'linear']:
+        for C in [1, 10, 1000]:
+            svc = SVC(kernel=kernel, C=C)
+            try:
+                svc.fit(train, train_labels)
+            except ValueError:
+                print(log_name,
+                    "SVM",
+                    "",
+                    '', '', '', '', '', sep=',')
+                return
+            
+            classes = list(svc.predict(test))
 
-    f1 = f1_score(test_labels, classes)
-    try:
-        auc = roc_auc_score(test_labels, classes)
-    except ValueError:
-        auc = "n/a"
-    acc = accuracy_score(test_labels, classes)
-    prc = precision_score(test_labels, classes)
-    rec = recall_score(test_labels, classes)
-    # acc = (anom_checked.count(False) + normal_checked.count(True)) / float(len(test))
+            f1 = f1_score(test_labels, classes)
+            try:
+                auc = roc_auc_score(test_labels, classes)
+            except ValueError:
+                auc = "n/a"
+            acc = accuracy_score(test_labels, classes)
+            prc = precision_score(test_labels, classes)
+            rec = recall_score(test_labels, classes)
+            # acc = (anom_checked.count(False) + normal_checked.count(True)) / float(len(test))
 
-    print(log_name, 
-          "SVM", 
-          "",
-          f1, auc, acc, prc, rec, sep=",")
+            print(log_name, 
+                "SVM", 
+                f'{kernel}-{C}',
+                f1, auc, acc, prc, rec, sep=",")
 
 
 def lof(log_name, train, test, k, contamination, labels):
@@ -85,10 +92,22 @@ def train(log_name, traces_name, w2v_model):
     shuffle(traces)
     v = create_vectors(w2v_model, traces)
 
+    print(log_name)
+    with open('dsets/' + log_name, 'w+') as f:
+        i = 0
+        l = None
+        for tup in zip(v,labels):
+            if l == None:
+                l = len(v)
+            print(f'{log_name} {i} / {l}\r', end='')
+            i += 1
+            print(','.join([str(vec) for vec in tup[0]]), tup[1], sep=',', file=f)
 
-    limit = int(len(traces) * 0.7)
-    train, test = v[:limit], v[limit:]
-    train_labels, test_labels = labels[:limit], labels[limit:]
+    # limit = int(len(traces) * 0.7)
+    # train, test = v[:limit], v[limit:]
+    # train_labels, test_labels = labels[:limit], labels[limit:]
+
+    # oc_train = [v[0] for v in zip(train, train_labels) if v[1] == 1]
     # train_traces, test_traces = traces[:limit], traces[limit:]
     
     # print("log_name,nu,method,accuracy")
@@ -96,14 +115,14 @@ def train(log_name, traces_name, w2v_model):
     # train_labels = np.array([1 if is_normal(trace, normal_traces) else -1 for trace in traces[:limit]])
     # test_labels = np.array([1 if is_normal(trace, normal_traces) else -1 for trace in traces[limit:]])
 
-    for nu in [0.001, 0.005, 0.01, 0.05, 0.1, 0.3, 0.5]: 
-        one_class(log_name, train, test, nu, test_labels)
+    # for nu in [0.001, 0.005, 0.01, 0.05, 0.1, 0.3, 0.5]: 
+    #     one_class(log_name, oc_train, test, nu, test_labels)
     
-    for k in [10, 15, 20, 25]:
-        for contamination in [0.01, 0.1, 0.3]:
-            lof(log_name, train, test, k, contamination, test_labels)
+    # for k in [10, 15, 20, 25]:
+    #     for contamination in [0.01, 0.1, 0.3]:
+    #         lof(log_name, oc_train, test, k, contamination, test_labels)
 
-    supervised(log_name, train, test, train_labels, test_labels)
+    # supervised(log_name, train, test, train_labels, test_labels)
 
 
 def is_normal(vector, normal_traces):
